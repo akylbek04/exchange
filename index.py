@@ -7,34 +7,26 @@ import json
 app = Flask(__name__)
 CORS(app)
 
-# In-memory data storage
-rates = defaultdict(lambda: {'buy': 0.0, 'sell': 0.0})  # stores current buy/sell rates per currency
-cash_register = defaultdict(float)  # stores available currency balances
-history = []  # list of operations with timestamps
+rates = defaultdict(lambda: {'buy': 0.0, 'sell': 0.0}) 
+cash_register = defaultdict(float) 
+history = [] 
 
-# Initialize with some sample data
 def initialize_data():
-    """Initialize the system with sample currency data"""
-    # Sample rates
     rates['usd'] = {'buy': 85.0, 'sell': 87.0}
     rates['eur'] = {'buy': 95.0, 'sell': 97.0}
     rates['som'] = {'buy': 0.01, 'sell': 0.011}
     
-    # Sample cash register balances
     cash_register['usd'] = 1000.0
     cash_register['eur'] = 500.0
     cash_register['som'] = 100000.0
 
 def get_error_response():
-    """Return standardized error response"""
     return jsonify({"error": "oshibka"}), 400
 
 def validate_currency(currency):
-    """Validate if currency exists in our system"""
     return currency.lower() in rates
 
 def validate_amount(amount_str):
-    """Validate and convert amount to float"""
     try:
         amount = float(amount_str)
         return amount > 0, amount
@@ -42,7 +34,6 @@ def validate_amount(amount_str):
         return False, 0
 
 def validate_rate(rate_str):
-    """Validate and convert rate to float"""
     try:
         rate = float(rate_str)
         return rate > 0, rate
@@ -50,59 +41,37 @@ def validate_rate(rate_str):
         return False, 0
 
 def validate_date(date_str):
-    """Validate date format YYYY-MM-DD"""
     try:
         datetime.strptime(date_str, '%Y-%m-%d')
         return True
     except ValueError:
         return False
 
-@app.route('/change_rate', methods=['GET'])
+@app.route('/change_rate')
 def change_rate():
-    """
-    Updates the buy or sell rate for the given currency.
-    /change_rate?currency=usd&type=buy&new_rate=87.6
-    """
     try:
         currency = request.args.get('currency', '').lower()
         rate_type = request.args.get('type', '').lower()
         new_rate_str = request.args.get('new_rate', '')
         
-        # Validate parameters
-        if not currency or not rate_type or not new_rate_str:
-            return get_error_response()
-        
-        if rate_type not in ['buy', 'sell']:
-            return get_error_response()
+        if not currency or not rate_type or not new_rate_str:return get_error_response()
+        if rate_type not in ['buy', 'sell']:return get_error_response()
         
         valid_rate, new_rate = validate_rate(new_rate_str)
-        if not valid_rate:
-            return get_error_response()
+        if not valid_rate:return get_error_response()
         
-        # Update the rate
         rates[currency][rate_type] = new_rate
         
-        return jsonify({
-            "message": f"Successfully updated {rate_type} rate for {currency.upper()} to {new_rate}",
-            "currency": currency.upper(),
-            "type": rate_type,
-            "new_rate": new_rate
-        })
-    
+        return  f"Successfully updated {rate_type} rate for {currency.upper()} to {new_rate}"
     except Exception:
         return get_error_response()
 
-@app.route('/sell', methods=['GET'])
+@app.route('/sell')
 def sell():
-    """
-    Sells currency.
-    /sell?currency=usd&amount=50
-    """
     try:
         currency = request.args.get('currency', '').lower()
         amount_str = request.args.get('amount', '')
         
-        # Validate parameters
         if not currency or not amount_str:
             return get_error_response()
         
@@ -113,7 +82,6 @@ def sell():
         if not valid_amount:
             return get_error_response()
         
-        # Check if we have sufficient balance
         if cash_register[currency] < amount:
             return get_error_response()
         
@@ -148,7 +116,7 @@ def sell():
     except Exception:
         return get_error_response()
 
-@app.route('/profit', methods=['GET'])
+@app.route('/profit')
 def profit():
     """
     Returns profit information.
@@ -161,10 +129,8 @@ def profit():
         from_date = request.args.get('from', '')
         to_date = request.args.get('to', '')
         
-        # Filter transactions based on parameters
         filtered_transactions = history.copy()
         
-        # Filter by currency if specified
         if currency:
             if not validate_currency(currency):
                 return get_error_response()
@@ -208,52 +174,27 @@ def profit():
                 "from": from_date,
                 "to": to_date
             }
-        
         return jsonify(response)
-    
     except Exception:
         return get_error_response()
 
-@app.route('/amount', methods=['GET'])
+@app.route('/amount')
 def amount():
-    """
-    Returns the total amount in the specified currency.
-    /amount?currency=som
-    """
     try:
         currency = request.args.get('currency', '').lower()
         
-        if not currency:
-            return get_error_response()
-        
-        if not validate_currency(currency):
-            return get_error_response()
-        
-        total_amount = cash_register[currency]
+        if not currency: return 'Currency is required'
+        if currency not in rates: return 'Currency not found'
         
         return jsonify({
-            "currency": currency.upper(),
-            "amount": total_amount
+            "currency": currency,
+            "amount": cash_register[currency]
         })
-    
     except Exception:
         return get_error_response()
 
-@app.route('/status', methods=['GET'])
-def status():
-    """
-    Additional endpoint to check system status and all data
-    """
-    return jsonify({
-        "rates": dict(rates),
-        "cash_register": dict(cash_register),
-        "recent_transactions": history[-10:] if history else [],
-        "total_transactions": len(history)
-    })
-
-@app.route('/', methods=['GET'])
+@app.route('/')
 def home():
-    """Home endpoint with API documentation"""
     return jsonify({
         "message": "Currency Exchanger REST API",
         "endpoints": {
@@ -267,7 +208,4 @@ def home():
 
 if __name__ == '__main__':
     initialize_data()
-    print("Currency Exchanger API initialized with sample data")
-    print("Available currencies:", list(rates.keys()))
-    print("Starting server on port 5002...")
     app.run(port=5002, debug=True)
