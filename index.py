@@ -7,205 +7,292 @@ import json
 app = Flask(__name__)
 CORS(app)
 
-rates = defaultdict(lambda: {'buy': 0.0, 'sell': 0.0}) 
-cash_register = defaultdict(float) 
-history = [] 
+# Data storage using defaultdict for in-memory storage
+rates = defaultdict(lambda: {'buy': 0.0, 'sell': 0.0})  # Currency rates
+cash_register = defaultdict(float)  # Available balances per currency
+history = []  # List of all transactions
 
-def initialize_data():
-    rates['usd'] = {'buy': 85.0, 'sell': 87.0}
-    rates['eur'] = {'buy': 95.0, 'sell': 97.0}
-    rates['som'] = {'buy': 0.01, 'sell': 0.011}
+def initialize_default_data():
+    """Initialize with some default example data"""
+    # Set up some default rates
+    rates['USD'] = {'buy': 87.5, 'sell': 87.0}
+    rates['EUR'] = {'buy': 95.0, 'sell': 94.5}
+    rates['SOM'] = {'buy': 0.01, 'sell': 0.009}
     
-    cash_register['usd'] = 1000.0
-    cash_register['eur'] = 500.0
-    cash_register['som'] = 100000.0
+    # Set up some default cash balances
+    cash_register['USD'] = 1000.0
+    cash_register['EUR'] = 500.0
+    cash_register['SOM'] = 100000.0
 
-def get_error_response():
-    return jsonify({"error": "oshibka"}), 400
+def log_transaction(transaction_type, currency, amount, profit=0.0):
+    """Log a transaction to history"""
+    transaction = {
+        'date': datetime.now().isoformat(),
+        'type': transaction_type,
+        'currency': currency.upper(),
+        'amount': amount,
+        'profit': profit
+    }
+    history.append(transaction)
 
 def validate_currency(currency):
-    return currency.lower() in rates
+    """Validate if currency exists in our rates"""
+    return currency.upper() in rates
 
 def validate_amount(amount_str):
+    """Validate and convert amount to float"""
     try:
         amount = float(amount_str)
-        return amount > 0, amount
+        if amount <= 0:
+            return None
+        return amount
     except (ValueError, TypeError):
-        return False, 0
+        return None
 
 def validate_rate(rate_str):
+    """Validate and convert rate to float"""
     try:
         rate = float(rate_str)
-        return rate > 0, rate
+        if rate <= 0:
+            return None
+        return rate
     except (ValueError, TypeError):
-        return False, 0
+        return None
 
 def validate_date(date_str):
+    """Validate date format YYYY-MM-DD"""
     try:
         datetime.strptime(date_str, '%Y-%m-%d')
         return True
     except ValueError:
         return False
 
+@app.route('/')
+def home():
+    """Home route showing available endpoints"""
+    endpoints = {
+        "endpoints": {
+            "/change_rate": "Updates buy/sell rate for currency. Params: currency, type (buy/sell), new_rate",
+            "/sell": "Sells currency. Params: currency, amount",
+            "/buy": "Buys currency. Params: currency, amount", 
+            "/profit": "Returns profit. Optional params: currency, from (YYYY-MM-DD), to (YYYY-MM-DD)",
+            "/amount": "Returns amounts. Optional param: currency"
+        },
+        "example_requests": {
+            "change_rate": "/change_rate?currency=usd&type=buy&new_rate=87.6",
+            "sell": "/sell?currency=usd&amount=50",
+            "buy": "/buy?currency=usd&amount=50",
+            "profit": "/profit?currency=usd",
+            "amount": "/amount?currency=som"
+        }
+    }
+    return jsonify(endpoints)
+
 @app.route('/change_rate')
 def change_rate():
+    """Updates the buy or sell rate for the given currency"""
     try:
-        currency = request.args.get('currency', '').lower()
+        currency = request.args.get('currency', '').upper()
         rate_type = request.args.get('type', '').lower()
         new_rate_str = request.args.get('new_rate', '')
         
-        if not currency or not rate_type or not new_rate_str:return get_error_response()
-        if rate_type not in ['buy', 'sell']:return get_error_response()
+        # Validate parameters
+        if not currency or not rate_type or not new_rate_str:
+            return jsonify({"error": "oshibka"})
         
-        valid_rate, new_rate = validate_rate(new_rate_str)
-        if not valid_rate:return get_error_response()
+        if rate_type not in ['buy', 'sell']:
+            return jsonify({"error": "oshibka"})
         
+        new_rate = validate_rate(new_rate_str)
+        if new_rate is None:
+            return jsonify({"error": "oshibka"})
+        
+        # Update the rate
         rates[currency][rate_type] = new_rate
         
-        return  f"Successfully updated {rate_type} rate for {currency.upper()} to {new_rate}"
-    except Exception:
-        return get_error_response()
+        return jsonify({
+            "message": f"Successfully updated {rate_type} rate for {currency} to {new_rate}",
+            "currency": currency,
+            "type": rate_type,
+            "new_rate": new_rate
+        })
+        
+    except Exception as e:
+        return jsonify({"error": "oshibka"})
 
 @app.route('/sell')
 def sell():
+    """Sells currency - converts from specified currency to base currency"""
     try:
-        currency = request.args.get('currency', '').lower()
+        currency = request.args.get('currency', '').upper()
         amount_str = request.args.get('amount', '')
         
+        # Validate parameters
         if not currency or not amount_str:
-            return get_error_response()
+            return jsonify({"error": "oshibka"})
+        
+        amount = validate_amount(amount_str)
+        if amount is None:
+            return jsonify({"error": "oshibka"})
         
         if not validate_currency(currency):
-            return get_error_response()
+            return jsonify({"error": "oshibka"})
         
-        valid_amount, amount = validate_amount(amount_str)
-        if not valid_amount:
-            return get_error_response()
-        
+        # Check if we have enough balance
         if cash_register[currency] < amount:
-            return get_error_response()
+            return jsonify({"error": "oshibka"})
+        
+        # Calculate conversion using sell rate
+        sell_rate = rates[currency]['sell']
+        converted_amount = amount * sell_rate
+        
+        # Update balances
+        cash_register[currency] -= amount
+        cash_register['SOM'] += converted_amount  # Assuming base currency is SOM
         
         # Calculate profit (difference between buy and sell rates)
         buy_rate = rates[currency]['buy']
-        sell_rate = rates[currency]['sell']
-        profit = (sell_rate - buy_rate) * amount
+        profit = amount * (buy_rate - sell_rate)
         
-        # Update cash register
-        cash_register[currency] -= amount
-        
-        # Record transaction in history
-        transaction = {
-            'timestamp': datetime.now().isoformat(),
-            'type': 'sell',
-            'currency': currency.upper(),
-            'amount': amount,
-            'rate': sell_rate,
-            'profit': profit
-        }
-        history.append(transaction)
+        # Log transaction
+        log_transaction('sell', currency, amount, profit)
         
         return jsonify({
-            "message": f"Successfully sold {amount} {currency.upper()}",
-            "currency": currency.upper(),
-            "amount": amount,
-            "rate": sell_rate,
+            "message": f"Successfully sold {amount} {currency}",
+            "amount_sold": amount,
+            "currency": currency,
+            "converted_to_som": converted_amount,
             "profit": profit,
             "remaining_balance": cash_register[currency]
         })
-    
-    except Exception:
-        return get_error_response()
+        
+    except Exception as e:
+        return jsonify({"error": "oshibka"})
+
+@app.route('/buy')
+def buy():
+    """Buys currency - converts from base currency to specified currency"""
+    try:
+        currency = request.args.get('currency', '').upper()
+        amount_str = request.args.get('amount', '')
+        
+        # Validate parameters
+        if not currency or not amount_str:
+            return jsonify({"error": "oshibka"})
+        
+        amount = validate_amount(amount_str)
+        if amount is None:
+            return jsonify({"error": "oshibka"})
+        
+        if not validate_currency(currency):
+            return jsonify({"error": "oshibka"})
+        
+        # Calculate required SOM amount using buy rate
+        buy_rate = rates[currency]['buy']
+        required_som = amount * buy_rate
+        
+        # Check if we have enough SOM balance
+        if cash_register['SOM'] < required_som:
+            return jsonify({"error": "oshibka"})
+        
+        # Update balances
+        cash_register['SOM'] -= required_som
+        cash_register[currency] += amount
+        
+        # Calculate profit (difference between buy and sell rates)
+        sell_rate = rates[currency]['sell']
+        profit = amount * (sell_rate - buy_rate)
+        
+        # Log transaction
+        log_transaction('buy', currency, amount, profit)
+        
+        return jsonify({
+            "message": f"Successfully bought {amount} {currency}",
+            "amount_bought": amount,
+            "currency": currency,
+            "som_spent": required_som,
+            "profit": profit,
+            "remaining_som_balance": cash_register['SOM']
+        })
+        
+    except Exception as e:
+        return jsonify({"error": "oshibka"})
 
 @app.route('/profit')
 def profit():
-    """
-    Returns profit information.
-    /profit - total profit across all currencies
-    /profit?currency=usd - profit only for USD
-    /profit?from=YYYY-MM-DD&to=YYYY-MM-DD - profit in date range
-    """
+    """Returns profit information"""
     try:
-        currency = request.args.get('currency', '').lower()
+        currency = request.args.get('currency', '').upper()
         from_date = request.args.get('from', '')
         to_date = request.args.get('to', '')
         
-        filtered_transactions = history.copy()
+        # Filter transactions based on parameters
+        filtered_history = history.copy()
         
+        # Filter by currency if specified
         if currency:
             if not validate_currency(currency):
-                return get_error_response()
-            filtered_transactions = [t for t in filtered_transactions if t['currency'].lower() == currency]
+                return jsonify({"error": "oshibka"})
+            filtered_history = [t for t in filtered_history if t['currency'] == currency]
         
         # Filter by date range if specified
         if from_date and to_date:
             if not validate_date(from_date) or not validate_date(to_date):
-                return get_error_response()
+                return jsonify({"error": "oshibka"})
             
             from_dt = datetime.strptime(from_date, '%Y-%m-%d')
             to_dt = datetime.strptime(to_date, '%Y-%m-%d')
             
-            filtered_transactions = [
-                t for t in filtered_transactions 
-                if from_dt <= datetime.fromisoformat(t['timestamp'].replace('Z', '+00:00')) <= to_dt
+            filtered_history = [
+                t for t in filtered_history 
+                if from_dt <= datetime.fromisoformat(t['date'].split('T')[0]) <= to_dt
             ]
-        elif from_date or to_date:
-            # If only one date is provided, it's an error
-            return get_error_response()
         
         # Calculate total profit
-        total_profit = sum(transaction['profit'] for transaction in filtered_transactions)
-        
-        # Group by currency for detailed breakdown
-        profit_by_currency = defaultdict(float)
-        for transaction in filtered_transactions:
-            profit_by_currency[transaction['currency']] += transaction['profit']
+        total_profit = sum(transaction['profit'] for transaction in filtered_history)
         
         response = {
             "total_profit": total_profit,
-            "profit_by_currency": dict(profit_by_currency),
-            "transaction_count": len(filtered_transactions)
+            "transaction_count": len(filtered_history)
         }
         
         if currency:
-            response["currency"] = currency.upper()
-        
+            response["currency"] = currency
         if from_date and to_date:
-            response["date_range"] = {
-                "from": from_date,
-                "to": to_date
-            }
+            response["date_range"] = {"from": from_date, "to": to_date}
+        
         return jsonify(response)
-    except Exception:
-        return get_error_response()
+        
+    except Exception as e:
+        return jsonify({"error": "oshibka"})
 
 @app.route('/amount')
 def amount():
+    """Returns amount information for currencies"""
     try:
-        currency = request.args.get('currency', '').lower()
+        currency = request.args.get('currency', '').upper()
         
-        if not currency: return 'Currency is required'
-        if currency not in rates: return 'Currency not found'
+        if currency:
+            # Return amount for specific currency
+            if not validate_currency(currency):
+                return jsonify({"error": "oshibka"})
+            
+            return jsonify({
+                "currency": currency,
+                "amount": cash_register[currency]
+            })
+        else:
+            # Return amounts for all currencies
+            amounts = {curr: balance for curr, balance in cash_register.items() if balance > 0}
+            return jsonify({
+                "amounts": amounts,
+                "total_currencies": len(amounts)
+            })
         
-        return jsonify({
-            "currency": currency,
-            "amount": cash_register[currency]
-        })
-    except Exception:
-        return get_error_response()
-
-@app.route('/')
-def home():
-    return jsonify({
-        "message": "Currency Exchanger REST API",
-        "endpoints": {
-            "change_rate": "GET /change_rate?currency=usd&type=buy&new_rate=87.6",
-            "sell": "GET /sell?currency=usd&amount=50",
-            "profit": "GET /profit or /profit?currency=usd or /profit?from=2024-01-01&to=2024-12-31",
-            "amount": "GET /amount?currency=som",
-            "status": "GET /status"
-        }
-    })
+    except Exception as e:
+        return jsonify({"error": "oshibka"})
 
 if __name__ == '__main__':
-    initialize_data()
+    # Initialize with default data
+    initialize_default_data()
     app.run(port=5002, debug=True)
