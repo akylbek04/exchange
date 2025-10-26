@@ -11,14 +11,14 @@ rates = defaultdict(lambda: {'buy': 0.0, 'sell': 0.0})
 cash_register = defaultdict(float) 
 history = []  
 
-def initialize_default_data():
-    rates['USD'] = {'buy': 87.5, 'sell': 87.0}
-    rates['EUR'] = {'buy': 95.0, 'sell': 94.5}
-    rates['SOM'] = {'buy': 0.01, 'sell': 0.009}
+# def initialize_default_data():
+#     rates['usd'] = {'buy': 87.5, 'sell': 87.0}
+#     rates['eur'] = {'buy': 95.0, 'sell': 94.5}
+#     rates['som'] = {'buy': 0.01, 'sell': 0.009}
 
-    cash_register['USD'] = 1000.0
-    cash_register['EUR'] = 500.0
-    cash_register['SOM'] = 100000.0
+#     cash_register['usd'] = 1000.0
+#     cash_register['eur'] = 500.0
+#     cash_register['som'] = 100000.0
 
 def log_transaction(transaction_type, currency, amount, profit=0.0):
     transaction = {
@@ -49,12 +49,14 @@ def home():
     }
     return jsonify(endpoints)
 
+
+
+
 @app.route('/change_rate')
 def change_rate():
     try:
-        currency = request.args.get('currency', '').upper()
-        rate_type = request.args.get('type', '').lower()
-        new_rate = float(request.args.get('new_rate', ''))
+        currency, rate_type, new_rate = get_params('currency', 'type', 'new_rate')
+        new_rate = float(new_rate)
         
         if not currency or not rate_type or not new_rate:return 'Enter all parameters'
         if rate_type not in ['buy', 'sell']:return 'Invalid rate type'
@@ -69,8 +71,8 @@ def change_rate():
 @app.route('/sell')
 def sell():
     try:
-        currency = request.args.get('currency', '').upper()
-        amount = float(request.args.get('amount', ''))
+        currency, amount = get_params('currency', 'amount')
+        amount = float(amount)
         
         if not currency or not amount:return 'Enter all parameters'
         if amount <= 0:return 'Invalid amount'
@@ -95,8 +97,8 @@ def sell():
 @app.route('/buy')
 def buy():
     try:
-        currency = request.args.get('currency', '').upper()
-        amount = float(request.args.get('amount', ''))
+        currency, amount = get_params('currency', 'amount')
+        amount = float(amount)
         
         if not currency or not amount:return 'Enter all parameters'
         if amount <= 0:return 'Invalid amount'
@@ -123,10 +125,7 @@ def buy():
 @app.route('/profit')
 def profit():
     try:
-        currency = request.args.get('currency', '').upper()
-        from_date = request.args.get('from', '')
-        to_date = request.args.get('to', '')
-        
+        currency, from_date, to_date = get_params('currency', 'from', 'to')
         filtered_history = history.copy()
         
         if currency:
@@ -159,7 +158,7 @@ def profit():
 @app.route('/amount')
 def amount():
     try:
-        currency = request.args.get('currency', '').upper()
+        currency = get_params('currency')
         
         if currency:
             if currency not in rates:return 'Invalid currency'
@@ -169,5 +168,4 @@ def amount():
         return jsonify({"error": "oshibka"})
 
 if __name__ == '__main__':
-    initialize_default_data()
     app.run(port=5000, debug=True) 
