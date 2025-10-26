@@ -40,6 +40,21 @@ def home():
     }
     return jsonify(endpoints)
 
+@app.route('/cash_register')
+def cash_register():
+    try:
+        currency, amount = get_params('currency', 'amount')
+        amount = float(amount)
+        
+        if not currency or not amount:return 'Enter all parameters'
+        if amount <= 0:return 'Invalid amount'
+        if currency not in rates:return 'Invalid currency'
+        
+        cash_register[currency] += amount
+        return f"Successfully added {amount} {currency} to cash register"
+    except Exception as e:
+        return jsonify({"error": "oshibka"})
+
 @app.route('/change_rate')
 def change_rate():
     try:
@@ -52,7 +67,7 @@ def change_rate():
         
         rates[currency][rate_type] = new_rate
         
-        return f"Successfully updated {rate_type} rate for {currency} to {new_rate}"
+        return f"Successfully {currency in rates ? 'updated' : 'added'} {rate_type} rate for {currency} to {new_rate}"
     except Exception as e:
         return jsonify({"error": "oshibka"})
 
