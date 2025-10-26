@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from collections import defaultdict
 from datetime import datetime
-import json
 
 app = Flask(__name__)
 CORS(app)
@@ -17,7 +16,7 @@ def log_transaction(transaction_type, currency, amount, profit=0.0):
         'type': transaction_type,
         'currency': currency,
         'amount': amount,
-        'profit': profit
+        'profit': f'{profit} soms'
     }
     history.append(transaction)
 
@@ -38,22 +37,21 @@ def home():
             "/amount": "Returns amounts. Optional param: currency"
         }
     }
-    return jsonify(endpoints)
+    return endpoints
 
 @app.route('/cash_register')
-def cash_register():
+def cash_register_route():
     try:
         currency, amount = get_params('currency', 'amount')
         amount = float(amount)
         
         if not currency or not amount:return 'Enter all parameters'
         if amount <= 0:return 'Invalid amount'
-        if currency not in rates:return 'Invalid currency'
         
         cash_register[currency] += amount
         return f"Successfully added {amount} {currency} to cash register"
     except Exception as e:
-        return jsonify({"error": "oshibka"})
+        return jsonify({"error": e})
 
 @app.route('/change_rate')
 def change_rate():
@@ -69,14 +67,15 @@ def change_rate():
 
         message = "updated" if currency in rates else "added"
         
-        return f"Successfully {rate_type} rate for {currency} to {new_rate}"
+        return f"Successfully {message} {rate_type} rate for {currency} to {new_rate}"
     except Exception as e:
-        return jsonify({"error": "oshibka"})
+        return jsonify({"error": e})
 
 @app.route('/sell')
 def sell():
     try:
         currency, amount = get_params('currency', 'amount')
+        currency = currency.lower()
         amount = float(amount)
         
         if not currency or not amount:return 'Enter all parameters'
@@ -90,20 +89,21 @@ def sell():
         
         cash_register[currency] += amount
         cash_register['som'] -= converted_amount 
-
-        profit = 0.0
         
-        log_transaction('sell', currency, amount, profit)
+        log_transaction('sell', currency, amount)
         
         return f"Client successfully sold {amount} {currency}"
     except Exception as e:
-        return jsonify({"error": "oshibka"})
+        return jsonify({"error": e})
 
 @app.route('/buy')
 def buy():
     try:
         currency, amount = get_params('currency', 'amount')
+        currency = currency.lower()
         amount = float(amount)
+
+        print(currency)
         
         if not currency or not amount:return 'Enter all parameters'
         if amount <= 0:return 'Invalid amount'
@@ -125,7 +125,7 @@ def buy():
         return f"Client successfully bought {amount} {currency}"
         
     except Exception as e:
-        return jsonify({"error": "oshibka"})
+        return jsonify({"error":e})
 
 @app.route('/profit')
 def profit():
@@ -158,7 +158,7 @@ def profit():
         return jsonify(response)
         
     except Exception as e:
-        return jsonify({"error": "oshibka"})
+        return jsonify({"error": e})
 
 @app.route('/amount')
 def amount():
@@ -170,7 +170,7 @@ def amount():
             return f"Currency: {currency}, Amount: {cash_register[currency]}"
         return cash_register
     except Exception as e:
-        return jsonify({"error": "oshibka"})
+        return jsonify({"error": e})
 
 if __name__ == '__main__':
-    app.run(port=5001, debug=True) 
+    app.run(port=5000, debug=True) 
