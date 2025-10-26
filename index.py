@@ -16,7 +16,7 @@ def log_transaction(transaction_type, currency, amount, profit=0.0):
         'type': transaction_type,
         'currency': currency,
         'amount': amount,
-        'profit': f'{profit} soms'
+        'profit': profit
     }
     history.append(transaction)
 
@@ -146,7 +146,7 @@ def profit():
         total_profit = sum(transaction['profit'] for transaction in filtered_history)
         
         response = {
-            "profit": total_profit,
+            "profit": f'{total_profit} soms',
             "transaction_count": len(filtered_history)
         }
         
