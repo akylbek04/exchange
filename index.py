@@ -119,6 +119,7 @@ def buy():
         
         sell_rate = rates[currency]['sell']
         profit = amount * (buy_rate - sell_rate)
+        cash_register['som'] += profit
         
         log_transaction('buy', currency, amount, profit)
     
