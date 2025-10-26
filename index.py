@@ -15,7 +15,7 @@ def log_transaction(transaction_type, currency, amount, profit=0.0):
     transaction = {
         'date': datetime.now().strftime('%Y-%m-%d'),
         'type': transaction_type,
-        'currency': currency.upper(),
+        'currency': currency,
         'amount': amount,
         'profit': profit
     }
@@ -66,8 +66,10 @@ def change_rate():
         if new_rate <= 0:return 'Invalid rate'
         
         rates[currency][rate_type] = new_rate
+
+        message = "updated" if currency in rates else "added"
         
-        return f"Successfully {currency in rates ? 'updated' : 'added'} {rate_type} rate for {currency} to {new_rate}"
+        return f"Successfully {rate_type} rate for {currency} to {new_rate}"
     except Exception as e:
         return jsonify({"error": "oshibka"})
 
@@ -171,4 +173,4 @@ def amount():
         return jsonify({"error": "oshibka"})
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True) 
+    app.run(port=5001, debug=True) 
