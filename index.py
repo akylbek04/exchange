@@ -11,15 +11,6 @@ rates = defaultdict(lambda: {'buy': 0.0, 'sell': 0.0})
 cash_register = defaultdict(float) 
 history = []  
 
-# def initialize_default_data():
-#     rates['usd'] = {'buy': 87.5, 'sell': 87.0}
-#     rates['eur'] = {'buy': 95.0, 'sell': 94.5}
-#     rates['som'] = {'buy': 0.01, 'sell': 0.009}
-
-#     cash_register['usd'] = 1000.0
-#     cash_register['eur'] = 500.0
-#     cash_register['som'] = 100000.0
-
 def log_transaction(transaction_type, currency, amount, profit=0.0):
     transaction = {
         'date': datetime.now().strftime('%Y-%m-%d'),
@@ -48,9 +39,6 @@ def home():
         }
     }
     return jsonify(endpoints)
-
-
-
 
 @app.route('/change_rate')
 def change_rate():
@@ -84,7 +72,7 @@ def sell():
         converted_amount = amount * sell_rate
         
         cash_register[currency] += amount
-        cash_register['SOM'] -= converted_amount 
+        cash_register['som'] -= converted_amount 
 
         profit = 0.0
         
@@ -107,9 +95,9 @@ def buy():
         buy_rate = rates[currency]['buy']
         required_som = amount * buy_rate
         
-        if cash_register['SOM'] < required_som:return 'Insufficient balance'
+        if cash_register['som'] < required_som:return 'Insufficient balance'
         
-        cash_register['SOM'] += required_som
+        cash_register['som'] += required_som
         cash_register[currency] -= amount
         
         sell_rate = rates[currency]['sell']
